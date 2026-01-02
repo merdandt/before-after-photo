@@ -1,0 +1,96 @@
+#!/bin/bash
+set -e
+
+# Colors for output
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Configuration
+SERVICE_NAME="before-after-photo"
+REGION="us-central1"
+
+echo -e "${BLUE}===================================${NC}"
+echo -e "${BLUE}GCP Cloud Run Deployment${NC}"
+echo -e "${BLUE}===================================${NC}"
+
+# Load environment variables from .env.local if it exists
+if [ -f .env.local ]; then
+    echo -e "${YELLOW}Loading environment variables from .env.local...${NC}"
+    # Load env vars, converting hyphens to underscores in variable names
+    set -a
+    source <(grep -v '^#' .env.local | sed 's/ = /=/g' | sed 's/^PROJECT-ID/PROJECT_ID/')
+    set +a
+fi
+
+# Check if PROJECT_ID is set
+if [ -z "${PROJECT_ID}" ]; then
+    echo -e "${RED}Error: PROJECT_ID not found in .env.local${NC}"
+    echo -e "${YELLOW}Please ensure .env.local contains: PROJECT-ID=your-project-id${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}Project ID: ${PROJECT_ID}${NC}"
+echo -e "${GREEN}Service: ${SERVICE_NAME}${NC}"
+echo -e "${GREEN}Region: ${REGION}${NC}"
+echo ""
+
+# Check if gcloud is installed
+if ! command -v gcloud &> /dev/null; then
+    echo -e "${RED}Error: gcloud CLI is not installed${NC}"
+    echo -e "${YELLOW}Install it from: https://cloud.google.com/sdk/docs/install${NC}"
+    exit 1
+fi
+
+# Set the project
+echo -e "${BLUE}Setting GCP project...${NC}"
+gcloud config set project ${PROJECT_ID}
+
+# Enable required APIs
+echo -e "${BLUE}Ensuring required APIs are enabled...${NC}"
+gcloud services enable \
+    cloudbuild.googleapis.com \
+    run.googleapis.com \
+    containerregistry.googleapis.com \
+    --project=${PROJECT_ID}
+
+# Submit build to Cloud Build
+echo -e "${BLUE}Submitting build to Cloud Build...${NC}"
+gcloud builds submit \
+    --config=cloudbuild.yaml \
+    --project=${PROJECT_ID} \
+    .
+
+# Get the service URL
+echo -e "${BLUE}Retrieving service URL...${NC}"
+SERVICE_URL=$(gcloud run services describe ${SERVICE_NAME} \
+    --region=${REGION} \
+    --platform=managed \
+    --format='value(status.url)' \
+    --project=${PROJECT_ID})
+
+echo -e "${GREEN}===================================${NC}"
+echo -e "${GREEN}✓ Deployment successful!${NC}"
+echo -e "${GREEN}===================================${NC}"
+echo -e "${GREEN}Service URL: ${SERVICE_URL}${NC}"
+echo -e "${GREEN}Health Check: ${SERVICE_URL}/health${NC}"
+echo ""
+echo -e "${YELLOW}Useful commands:${NC}"
+echo -e "  View logs:    gcloud run services logs read ${SERVICE_NAME} --region=${REGION}"
+echo -e "  Describe:     gcloud run services describe ${SERVICE_NAME} --region=${REGION}"
+echo -e "  List deploys: gcloud run revisions list --service=${SERVICE_NAME} --region=${REGION}"
+echo ""
+
+# Test the deployed service
+echo -e "${BLUE}Testing health endpoint...${NC}"
+sleep 3
+if curl -s ${SERVICE_URL}/health > /dev/null 2>&1; then
+    echo -e "${GREEN}✓ Health check passed!${NC}"
+else
+    echo -e "${YELLOW}⚠ Health check failed. Service may still be starting...${NC}"
+fi
+
+echo ""
+echo -e "${GREEN}Deployment complete!${NC}"

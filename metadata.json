@@ -1,0 +1,5 @@
+{
+  "name": "BeforeAfter Stitcher",
+  "description": "A fast, mobile-first tool to combine two images into a single Before/After comparison image with smart contrasting labels.",
+  "requestFramePermissions": []
+}
