@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ImageUploader } from './components/ImageUploader';
 import { Button } from './components/Button';
 import { LabelChipSelector, LABEL_PRESETS } from './components/LabelChipSelector';
@@ -155,9 +155,20 @@ const App = () => {
       
       {/* Header */}
       <header className="mb-10 text-center">
-        <h1 className="text-3xl md:text-5xl font-black text-dark mb-3 tracking-tight" style={{ lineHeight: '1.2' }}>
-          Before<span className="text-brand-500">After</span>
-        </h1>
+        <div className="flex items-center justify-center gap-3 mb-3">
+          <img
+            src="/assets/logo.png"
+            alt="Logo"
+            className="w-20 h-26 md:w-22 md:h-22 object-contain"
+            style={{
+              transform: 'translateZ(0)',
+              backfaceVisibility: 'hidden',
+            }}
+          />
+          <h1 className="text-3xl md:text-5xl font-black text-dark tracking-tight" style={{ lineHeight: '1.2' }}>
+            Before<span className="text-brand-500">After</span>
+          </h1>
+        </div>
         <p className="text-dark-muted font-medium text-base md:text-lg">Create professional comparisons in seconds.</p>
       </header>
 
@@ -257,8 +268,19 @@ const App = () => {
       )}
 
       {/* Footer Info */}
-      <div className="mt-12 text-center text-dark-muted text-sm font-medium">
-        <p>Images are processed locally in your browser.</p>
+      <div className="mt-12 text-center space-y-2">
+        <p className="text-dark-muted text-sm font-medium">Images are processed locally in your browser.</p>
+        <p className="text-dark-muted text-xs font-medium">
+          Powered by{' '}
+          <a
+            href="https://salesshortcut.ai/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand-600 hover:text-brand-700 font-semibold transition-colors duration-200 underline decoration-brand-500/30 hover:decoration-brand-600"
+          >
+            SalesShortcut
+          </a>
+        </p>
       </div>
 
       {/* Settings Modal */}
