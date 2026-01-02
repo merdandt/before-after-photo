@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { OutputSettings, SocialFormat, LayoutOrientation } from '../types';
-import { analytics } from '../utils/analytics';
+import { analytics, trackEvent } from '../utils/analytics';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -23,6 +23,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
   onSettingsChange,
 }) => {
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [feedbackEmail, setFeedbackEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
   if (!isOpen) return null;
 
   const handleFormatChange = (format: SocialFormat) => {
@@ -51,6 +56,59 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       orientation: 'horizontal',
       quality: 95,
     });
+  };
+
+  const handleFeedbackSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitStatus('idle');
+
+    try {
+      const formData = new FormData();
+      const accessKey = import.meta.env.VITE_WEB3FORM;
+
+      console.log('Access Key:', accessKey); // Debug
+
+      // Include email in the message body
+      const messageWithEmail = feedbackEmail
+        ? `${feedbackMessage}\n\n---\nReply to: ${feedbackEmail}`
+        : feedbackMessage;
+
+      formData.append('access_key', accessKey || '');
+      formData.append('message', messageWithEmail);
+      formData.append('from_name', feedbackEmail || 'Anonymous User');
+      formData.append('subject', 'BeforeAfter - Feedback/Feature Request');
+
+      const response = await fetch('https://api.web3forms.com/submit', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      console.log('Web3Forms response:', data); // Debug
+
+      if (data.success) {
+        setSubmitStatus('success');
+        setFeedbackMessage('');
+        setFeedbackEmail('');
+
+        // Track feedback submission
+        trackEvent('feedback_submitted', {
+          has_email: !!feedbackEmail,
+        });
+
+        // Reset success message after 3 seconds
+        setTimeout(() => setSubmitStatus('idle'), 3000);
+      } else {
+        console.error('Web3Forms error:', data.message);
+        setSubmitStatus('error');
+      }
+    } catch (error) {
+      console.error('Feedback submission error:', error);
+      setSubmitStatus('error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const hasNonDefaultSettings =
@@ -165,6 +223,72 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Feedback Form */}
+            <div className="pt-6 border-t border-light-border">
+              <div className="mb-4">
+                <h3 className="text-sm font-bold text-dark mb-1">Need something else?</h3>
+                <p className="text-xs text-dark-muted font-medium">Share your feedback or request a feature</p>
+              </div>
+
+              <form onSubmit={handleFeedbackSubmit} className="space-y-3">
+                <div>
+                  <input
+                    type="email"
+                    placeholder="Your email (optional)"
+                    value={feedbackEmail}
+                    onChange={(e) => setFeedbackEmail(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border-2 border-light-border focus:border-brand-500 focus:ring-2 focus:ring-brand-400/30 outline-none transition-all duration-200 text-sm font-medium placeholder:text-dark-muted/50"
+                  />
+                </div>
+                <div>
+                  <textarea
+                    placeholder="Tell us what you think or what features you'd like..."
+                    value={feedbackMessage}
+                    onChange={(e) => setFeedbackMessage(e.target.value)}
+                    required
+                    rows={3}
+                    className="w-full px-4 py-2.5 rounded-xl border-2 border-light-border focus:border-brand-500 focus:ring-2 focus:ring-brand-400/30 outline-none transition-all duration-200 text-sm font-medium placeholder:text-dark-muted/50 resize-none"
+                  />
+                </div>
+
+                {submitStatus === 'success' && (
+                  <div className="flex items-center gap-2 text-green-600 text-sm font-semibold">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Thanks! We received your feedback.
+                  </div>
+                )}
+
+                {submitStatus === 'error' && (
+                  <div className="flex items-center gap-2 text-red-600 text-sm font-semibold">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                    Something went wrong. Please try again.
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !feedbackMessage.trim()}
+                  className="w-full px-4 py-2.5 bg-brand-500 hover:bg-brand-600 active:bg-brand-700 disabled:bg-dark-muted/20 disabled:text-dark-muted disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-200 text-sm shadow-soft hover:shadow-md-soft"
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Sending...
+                    </span>
+                  ) : (
+                    'Send Feedback'
+                  )}
+                </button>
+              </form>
             </div>
           </div>
 
