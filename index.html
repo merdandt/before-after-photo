@@ -6,23 +6,53 @@
     <title>Before & After Stitcher</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
         theme: {
           extend: {
             fontFamily: {
-              sans: ['Lato', 'sans-serif'],
+              sans: ['Inter', 'sans-serif'],
             },
             colors: {
               brand: {
-                50: '#f0f9ff',
-                100: '#e0f2fe',
-                500: '#0ea5e9',
-                600: '#0284c7',
-                900: '#0c4a6e',
+                50: '#f0fdf4',
+                100: '#dcfce7',
+                200: '#bbf7d0',
+                300: '#86efac',
+                400: '#4ade80',
+                500: '#45ca63',
+                600: '#16a34a',
+                700: '#15803d',
+                800: '#166534',
+                900: '#14532d',
+              },
+              accent: {
+                orange: '#ff3a00',
+                red: '#ff4726',
+              },
+              dark: {
+                DEFAULT: '#262626',
+                muted: '#575757',
+                deep: '#0c0c0c',
+              },
+              light: {
+                DEFAULT: '#fafafa',
+                border: '#ebebeb',
+                gray: '#ededed',
               }
+            },
+            boxShadow: {
+              'sm-soft': '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
+              'soft': '0 2px 8px 0 rgba(0, 0, 0, 0.06)',
+              'md-soft': '0 4px 12px 0 rgba(0, 0, 0, 0.08)',
+              'lg-soft': '0 8px 24px 0 rgba(0, 0, 0, 0.1)',
+            },
+            borderRadius: {
+              'xl': '12px',
+              '2xl': '16px',
+              '3xl': '20px',
             }
           }
         }
@@ -55,7 +85,7 @@
 </script>
 <link rel="stylesheet" href="/index.css">
 </head>
-  <body class="bg-slate-50 text-slate-900 font-sans antialiased min-h-screen">
+  <body class="bg-light text-dark font-sans antialiased min-h-screen">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

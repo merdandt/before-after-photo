@@ -12,3 +12,27 @@ export interface LabelConfig {
   imageX: number;
   imageW: number;
 }
+
+export interface LabelPreset {
+  id: string;
+  leftLabel: string;
+  rightLabel: string;
+  displayName: string;
+}
+
+export type LayoutOrientation = 'horizontal' | 'vertical';
+
+export type SocialFormat = 'original' | 'instagram-square' | 'instagram-story' | 'facebook-post' | 'twitter-post';
+
+export interface OutputSettings {
+  format: SocialFormat;
+  orientation: LayoutOrientation;
+  quality: number;
+}
+
+export interface ImageProcessingOptions {
+  beforeLabel: string;
+  afterLabel: string;
+  orientation: LayoutOrientation;
+  targetFormat?: SocialFormat;
+}

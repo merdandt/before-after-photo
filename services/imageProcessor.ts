@@ -1,4 +1,4 @@
-import { LabelConfig } from '../types';
+import { LabelConfig, ImageProcessingOptions, SocialFormat } from '../types';
 
 // Palette from Python code
 const PALETTE = {
@@ -57,22 +57,70 @@ const getBestContrast = (bgRgb: number[]) => {
   };
 };
 
-export const stitchImages = async (beforeFile: File, afterFile: File): Promise<string> => {
+// Get target dimensions for social media formats
+const getTargetDimensions = (format: SocialFormat): { width: number; height: number } | null => {
+  const formats = {
+    'instagram-square': { width: 1080, height: 1080 },
+    'instagram-story': { width: 1080, height: 1920 },
+    'facebook-post': { width: 1200, height: 630 },
+    'twitter-post': { width: 1200, height: 675 },
+    'original': null,
+  };
+  return formats[format] || null;
+};
+
+export const stitchImages = async (
+  beforeFile: File,
+  afterFile: File,
+  options: ImageProcessingOptions
+): Promise<string> => {
   const [imgB, imgA] = await Promise.all([
     loadImage(URL.createObjectURL(beforeFile)),
     loadImage(URL.createObjectURL(afterFile)),
   ]);
 
-  // Match Height Logic
-  const h = Math.min(imgB.height, imgA.height);
-  const wB = Math.floor(imgB.width * (h / imgB.height));
-  const wA = Math.floor(imgA.width * (h / imgA.height));
+  const sep = 15;
+  let canvasWidth: number;
+  let canvasHeight: number;
+  let wB: number, hB: number, wA: number, hA: number;
+  let xB: number, yB: number, xA: number, yA: number;
+
+  if (options.orientation === 'vertical') {
+    // Vertical Layout: Match Width
+    const w = Math.min(imgB.width, imgA.width);
+    wB = w;
+    wA = w;
+    hB = Math.floor(imgB.height * (w / imgB.width));
+    hA = Math.floor(imgA.height * (w / imgA.width));
+
+    canvasWidth = w;
+    canvasHeight = hB + hA + sep;
+
+    xB = 0;
+    yB = 0;
+    xA = 0;
+    yA = hB + sep;
+  } else {
+    // Horizontal Layout: Match Height
+    const h = Math.min(imgB.height, imgA.height);
+    wB = Math.floor(imgB.width * (h / imgB.height));
+    wA = Math.floor(imgA.width * (h / imgA.height));
+    hB = h;
+    hA = h;
+
+    canvasWidth = wB + wA + sep;
+    canvasHeight = h;
+
+    xB = 0;
+    yB = 0;
+    xA = wB + sep;
+    yA = 0;
+  }
 
   // Canvas Setup
-  const sep = 15;
   const canvas = document.createElement('canvas');
-  canvas.width = wB + wA + sep;
-  canvas.height = h;
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
   if (!ctx) throw new Error('Could not get canvas context');
@@ -82,32 +130,33 @@ export const stitchImages = async (beforeFile: File, afterFile: File): Promise<s
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // Draw Images
-  // We need to draw them with high quality scaling if possible. 
-  // Browser built-in scaling is generally decent for this.
-  ctx.drawImage(imgB, 0, 0, wB, h);
-  ctx.drawImage(imgA, wB + sep, 0, wA, h);
+  ctx.drawImage(imgB, xB, yB, wB, hB);
+  ctx.drawImage(imgA, xA, yA, wA, hA);
 
-  // Font Setup (5% of Height)
-  const fontSize = Math.floor(h * 0.05);
-  // Using standard font string. "bold" matches the Python bold requirement.
-  ctx.font = `bold ${fontSize}px Lato, sans-serif`;
+  // Font Setup (5% of the relevant dimension)
+  const fontSize = Math.floor((options.orientation === 'vertical' ? canvasWidth : canvasHeight) * 0.05);
+  ctx.font = `bold ${fontSize}px Inter, sans-serif`;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'center';
 
-  const labels: LabelConfig[] = [
-    { text: "BEFORE", imageX: 0, imageW: wB, align: "left" },
-    { text: "AFTER", imageX: wB + sep, imageW: wA, align: "right" }
-  ];
+  const labels: LabelConfig[] =
+    options.orientation === 'vertical'
+      ? [
+          { text: options.beforeLabel, imageX: xB, imageW: wB, align: 'left' },
+          { text: options.afterLabel, imageX: xA, imageW: wA, align: 'left' },
+        ]
+      : [
+          { text: options.beforeLabel, imageX: xB, imageW: wB, align: 'left' },
+          { text: options.afterLabel, imageX: xA, imageW: wA, align: 'right' },
+        ];
 
-  labels.forEach((item) => {
+  labels.forEach((item, index) => {
     const text = item.text;
     const metrics = ctx.measureText(text);
-    
+
     // Calculate dimensions
-    // measureText gives actual bounding box, but we want a bit more robust height estimation
-    // approximating height from font size is usually safer for vertical centering in canvas across browsers
     const textW = metrics.width;
-    const textH = fontSize; // Approximate cap height + descender
+    const textH = fontSize;
 
     const padInnerX = textW * 0.4;
     const padInnerY = textH * 0.4;
@@ -116,7 +165,7 @@ export const stitchImages = async (beforeFile: File, afterFile: File): Promise<s
     const boxH = textH + (padInnerY * 2);
 
     const marginX = Math.floor(item.imageW * 0.05);
-    const marginY = Math.floor(h * 0.05);
+    const marginY = Math.floor((options.orientation === 'vertical' ? (index === 0 ? hB : hA) : canvasHeight) * 0.05);
 
     let boxX = 0;
     if (item.align === 'left') {
@@ -125,7 +174,17 @@ export const stitchImages = async (beforeFile: File, afterFile: File): Promise<s
       boxX = (item.imageX + item.imageW) - marginX - boxW;
     }
 
-    const boxY = h - marginY - boxH;
+    // For vertical layout, position labels at the bottom of each image section
+    let boxY = 0;
+    if (options.orientation === 'vertical') {
+      if (index === 0) {
+        boxY = hB - marginY - boxH; // Bottom of first image
+      } else {
+        boxY = hB + sep + hA - marginY - boxH; // Bottom of second image
+      }
+    } else {
+      boxY = canvasHeight - marginY - boxH; // Bottom of canvas for horizontal
+    }
 
     // Smart Color Logic
     // Get average color of the area where the box will be
@@ -173,8 +232,42 @@ export const stitchImages = async (beforeFile: File, afterFile: File): Promise<s
     const centerX = boxX + (boxW / 2);
     const centerY = boxY + (boxH / 2);
     // Slight vertical adjustment because 'middle' baseline can vary slightly by font
-    ctx.fillText(text, centerX, centerY + (fontSize * 0.05)); 
+    ctx.fillText(text, centerX, centerY + (fontSize * 0.05));
   });
+
+  // Apply social media format if specified
+  if (options.targetFormat && options.targetFormat !== 'original') {
+    const targetDims = getTargetDimensions(options.targetFormat);
+    if (targetDims) {
+      const finalCanvas = document.createElement('canvas');
+      finalCanvas.width = targetDims.width;
+      finalCanvas.height = targetDims.height;
+      const finalCtx = finalCanvas.getContext('2d');
+
+      if (!finalCtx) throw new Error('Could not get final canvas context');
+
+      // Fill with white background
+      finalCtx.fillStyle = 'white';
+      finalCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+
+      // Calculate scaling to fit comparison image
+      const scale = Math.min(
+        targetDims.width / canvas.width,
+        targetDims.height / canvas.height
+      );
+
+      const scaledWidth = canvas.width * scale;
+      const scaledHeight = canvas.height * scale;
+
+      // Center the image
+      const x = (targetDims.width - scaledWidth) / 2;
+      const y = (targetDims.height - scaledHeight) / 2;
+
+      finalCtx.drawImage(canvas, x, y, scaledWidth, scaledHeight);
+
+      return finalCanvas.toDataURL('image/jpeg', 0.95);
+    }
+  }
 
   return canvas.toDataURL('image/jpeg', 0.95);
 };
