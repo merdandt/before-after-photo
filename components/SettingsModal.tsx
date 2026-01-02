@@ -1,5 +1,6 @@
 import React from 'react';
 import { OutputSettings, SocialFormat, LayoutOrientation } from '../types';
+import { analytics } from '../utils/analytics';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -26,10 +27,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleFormatChange = (format: SocialFormat) => {
     onSettingsChange({ ...settings, format });
+
+    // Track format change
+    analytics.trackSettingsChanged({
+      setting_type: 'format',
+      new_value: format,
+    });
   };
 
   const handleOrientationChange = (orientation: LayoutOrientation) => {
     onSettingsChange({ ...settings, orientation });
+
+    // Track orientation change
+    analytics.trackSettingsChanged({
+      setting_type: 'orientation',
+      new_value: orientation,
+    });
   };
 
   const handleReset = () => {

@@ -1,4 +1,6 @@
 import React, { useRef, useState } from 'react';
+import { analytics } from '../utils/analytics';
+import { createOptimizedPreview } from '../utils/imageOptimization';
 
 interface ImageUploaderProps {
   label: string;
@@ -12,12 +14,32 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, file, onFil
   const [isDragging, setIsDragging] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
 
-  // Update preview when file changes
+  // Update preview when file changes - use optimized preview for better mobile performance
   React.useEffect(() => {
     if (file) {
-      const url = URL.createObjectURL(file);
-      setPreview(url);
-      return () => URL.revokeObjectURL(url);
+      let isCancelled = false;
+
+      createOptimizedPreview(file, 800, 800, 0.85)
+        .then((optimizedUrl) => {
+          if (!isCancelled) {
+            setPreview(optimizedUrl);
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to create optimized preview:', error);
+          // Fallback to original file if optimization fails
+          if (!isCancelled) {
+            const url = URL.createObjectURL(file);
+            setPreview(url);
+          }
+        });
+
+      return () => {
+        isCancelled = true;
+        if (preview) {
+          URL.revokeObjectURL(preview);
+        }
+      };
     } else {
       setPreview(null);
     }
@@ -50,15 +72,45 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, file, onFil
   const processFile = (f: File) => {
     if (f.type.startsWith('image/')) {
       onFileSelect(f);
+
+      // Track image upload
+      const fileSizeKB = Math.round(f.size / 1024);
+      const uploadParams = {
+        file_size_kb: fileSizeKB,
+        file_type: f.type,
+      };
+
+      if (label.toLowerCase() === 'before') {
+        analytics.trackBeforeImageUpload(uploadParams);
+      } else if (label.toLowerCase() === 'after') {
+        analytics.trackAfterImageUpload(uploadParams);
+      }
     } else {
       alert('Please upload an image file');
+
+      // Track upload error
+      analytics.trackProcessingError({
+        error_message: 'Invalid file type',
+        error_stage: 'upload',
+      });
     }
   };
 
   if (preview) {
     return (
       <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden shadow-soft border border-light-border group">
-        <img src={preview} alt={label} className="w-full h-full object-cover" />
+        <img
+          src={preview}
+          alt={label}
+          className="w-full h-full object-cover"
+          style={{
+            transform: 'translateZ(0)',
+            backfaceVisibility: 'hidden',
+            WebkitBackfaceVisibility: 'hidden',
+          }}
+          loading="lazy"
+          decoding="async"
+        />
         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ease-out flex flex-col items-center justify-center gap-3">
             <span className="text-white font-bold text-lg tracking-tight">{label}</span>
             <button

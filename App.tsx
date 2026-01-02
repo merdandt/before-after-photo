@@ -5,6 +5,7 @@ import { LabelChipSelector, LABEL_PRESETS } from './components/LabelChipSelector
 import { SettingsModal } from './components/SettingsModal';
 import { stitchImages } from './services/imageProcessor';
 import { ProcessingStatus, OutputSettings, LabelPreset } from './types';
+import { analytics } from './utils/analytics';
 
 const App = () => {
   const [beforeFile, setBeforeFile] = useState<File | null>(null);
@@ -22,6 +23,15 @@ const App = () => {
   const handleGenerate = async () => {
     if (!beforeFile || !afterFile) return;
 
+    // Track generate comparison event
+    analytics.trackGenerateComparison({
+      orientation: settings.orientation,
+      target_format: settings.format,
+      before_label: labelPreset.leftLabel,
+      after_label: labelPreset.rightLabel,
+    });
+
+    const startTime = performance.now();
     setStatus('processing');
     try {
       // Small timeout to let React render the loading state before blocking main thread with canvas ops
@@ -35,17 +45,36 @@ const App = () => {
           });
           setResultUrl(url);
           setStatus('success');
+
+          // Store processing time for download event
+          const processingTime = performance.now() - startTime;
+          (window as any).__processingTime = processingTime;
         } catch (error) {
           console.error(error);
           setStatus('error');
+
+          // Track processing error
+          analytics.trackProcessingError({
+            error_message: error instanceof Error ? error.message : 'Unknown error',
+            error_stage: 'processing',
+          });
         }
       }, 100);
     } catch (e) {
       setStatus('error');
+
+      // Track processing error
+      analytics.trackProcessingError({
+        error_message: e instanceof Error ? e.message : 'Unknown error',
+        error_stage: 'processing',
+      });
     }
   };
 
   const handleReset = () => {
+    // Track create new event
+    analytics.trackCreateNew();
+
     setBeforeFile(null);
     setAfterFile(null);
     setResultUrl(null);
@@ -54,6 +83,8 @@ const App = () => {
 
   const downloadImage = async () => {
     if (!resultUrl) return;
+
+    const processingTime = (window as any).__processingTime || undefined;
 
     try {
       // Convert data URL to blob for better mobile support
@@ -67,6 +98,13 @@ const App = () => {
           files: [file],
           title: 'Before/After Comparison',
         });
+
+        // Track share API usage
+        analytics.trackImageDownload({
+          download_method: 'share_api',
+          processing_time_ms: processingTime,
+        });
+        analytics.trackShareMethod({ method: 'native_share' });
         return;
       }
 
@@ -79,6 +117,13 @@ const App = () => {
       document.body.appendChild(link);
       link.click();
 
+      // Track download link usage
+      analytics.trackImageDownload({
+        download_method: 'download_link',
+        processing_time_ms: processingTime,
+      });
+      analytics.trackShareMethod({ method: 'download' });
+
       // Cleanup
       setTimeout(() => {
         document.body.removeChild(link);
@@ -86,8 +131,22 @@ const App = () => {
       }, 100);
     } catch (error) {
       console.error('Download failed:', error);
+
+      // Track download error
+      analytics.trackProcessingError({
+        error_message: error instanceof Error ? error.message : 'Download failed',
+        error_stage: 'download',
+      });
+
       // Last resort: open in new tab (user can long-press to save on mobile)
       window.open(resultUrl, '_blank');
+
+      // Track fallback method usage
+      analytics.trackImageDownload({
+        download_method: 'new_tab_fallback',
+        processing_time_ms: processingTime,
+      });
+      analytics.trackShareMethod({ method: 'fallback' });
     }
   };
 
@@ -172,7 +231,18 @@ const App = () => {
       ) : (
         <div className="space-y-6 animate-in zoom-in-95 duration-300">
           <div className="bg-white p-3 rounded-2xl shadow-lg-soft border border-light-border">
-            <img src={resultUrl} alt="Result" className="w-full h-auto rounded-xl" />
+            <img
+              src={resultUrl}
+              alt="Result"
+              className="w-full h-auto rounded-xl"
+              style={{
+                transform: 'translateZ(0)',
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
+              }}
+              loading="eager"
+              decoding="async"
+            />
           </div>
 
           <div className="flex flex-col md:flex-row gap-3">

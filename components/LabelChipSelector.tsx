@@ -1,5 +1,6 @@
 import React from 'react';
 import { LabelPreset } from '../types';
+import { analytics } from '../utils/analytics';
 
 export const LABEL_PRESETS: LabelPreset[] = [
   { id: 'before-after', leftLabel: 'BEFORE', rightLabel: 'AFTER', displayName: 'Before / After' },
@@ -26,7 +27,15 @@ export const LabelChipSelector: React.FC<LabelChipSelectorProps> = ({
           return (
             <button
               key={preset.id}
-              onClick={() => onPresetChange(preset)}
+              onClick={() => {
+                onPresetChange(preset);
+                // Track label preset selection
+                analytics.trackLabelPresetSelected({
+                  preset_name: preset.displayName,
+                  before_label: preset.leftLabel,
+                  after_label: preset.rightLabel,
+                });
+              }}
               className={`
                 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm
                 transition-all duration-200 ease-out
